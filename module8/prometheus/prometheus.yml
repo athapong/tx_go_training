@@ -1,0 +1,30 @@
+global:
+  scrape_interval: 15s       # ดึง metrics ทุก 15 วินาที
+  evaluation_interval: 15s   # evaluate rules ทุก 15 วินาที
+  external_labels:
+    cluster: "local-dev"
+    env: "development"
+
+# Alerting rules (ตัวอย่าง)
+rule_files:
+  # - "alerts.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus scrapes itself
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Order service — รัน go run main.go ที่ host machine
+  # host.docker.internal = เข้าถึง host จาก container (macOS/Windows)
+  - job_name: "order-service"
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+    metrics_path: "/metrics"
+    scrape_interval: 10s  # scrape บ่อยขึ้นสำหรับ demo
+
+  # ถ้ารัน service ใน Docker ให้ใช้ service name แทน
+  # - job_name: "order-service-docker"
+  #   static_configs:
+  #     - targets: ["order-service:8080"]

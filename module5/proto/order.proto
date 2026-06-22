@@ -1,0 +1,195 @@
+syntax = "proto3";
+
+package order;
+
+option go_package = "tx_go_training/module5/proto/orderpb";
+
+import "google/rpc/status.proto";
+import "google/rpc/error_details.proto";
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+// OrderStatus แสดงสถานะของ Order ตลอด lifecycle
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;  // ไม่ระบุ (zero value)
+  ORDER_STATUS_PENDING     = 1;  // รอดำเนินการ
+  ORDER_STATUS_CONFIRMED   = 2;  // ยืนยันแล้ว
+  ORDER_STATUS_SHIPPED     = 3;  // จัดส่งแล้ว
+  ORDER_STATUS_DELIVERED   = 4;  // ส่งถึงมือลูกค้าแล้ว
+  ORDER_STATUS_CANCELLED   = 5;  // ยกเลิกแล้ว
+  ORDER_STATUS_FAILED      = 6;  // เกิดข้อผิดพลาด
+}
+
+// PaymentMethod วิธีชำระเงินที่รองรับ
+enum PaymentMethod {
+  PAYMENT_METHOD_UNSPECIFIED   = 0;
+  PAYMENT_METHOD_CREDIT_CARD   = 1;
+  PAYMENT_METHOD_BANK_TRANSFER = 2;
+  PAYMENT_METHOD_PROMPTPAY     = 3;  // Thai PromptPay
+  PAYMENT_METHOD_WALLET        = 4;
+}
+
+// ShipmentEventType ประเภทเหตุการณ์การจัดส่ง (ใช้ใน streaming)
+enum ShipmentEventType {
+  SHIPMENT_EVENT_UNSPECIFIED  = 0;
+  SHIPMENT_EVENT_PICKED_UP    = 1;  // พัสดุถูกรับไปแล้ว
+  SHIPMENT_EVENT_IN_TRANSIT   = 2;  // อยู่ระหว่างขนส่ง
+  SHIPMENT_EVENT_OUT_FOR_DEL  = 3;  // กำลังนำส่ง
+  SHIPMENT_EVENT_DELIVERED    = 4;  // ส่งถึงปลายทาง
+  SHIPMENT_EVENT_FAILED       = 5;  // การจัดส่งล้มเหลว
+}
+
+// ─────────────────────────────────────────────
+// Core Messages
+// ─────────────────────────────────────────────
+
+// Address ที่อยู่จัดส่ง
+message Address {
+  string street      = 1;  // ที่อยู่ (เลขที่/ถนน)
+  string city        = 2;  // เมือง/อำเภอ
+  string province    = 3;  // จังหวัด
+  string postal_code = 4;  // รหัสไปรษณีย์
+  string country     = 5;  // ประเทศ (ISO 3166-1 alpha-2 เช่น "TH")
+}
+
+// OrderItem รายการสินค้าในออเดอร์
+message OrderItem {
+  string product_id   = 1;  // รหัสสินค้า
+  string product_name = 2;  // ชื่อสินค้า
+  int32  quantity     = 3;  // จำนวน
+  int64  unit_price   = 4;  // ราคาต่อหน่วย (หน่วย: สตางค์ เพื่อหลีกเลี่ยง floating point)
+  string currency     = 5;  // สกุลเงิน (ISO 4217 เช่น "THB")
+}
+
+// Order ข้อมูล Order ทั้งหมด
+message Order {
+  string        order_id      = 1;   // UUID
+  string        customer_id   = 2;
+  repeated OrderItem items    = 3;
+  OrderStatus   status        = 4;
+  Address       shipping_addr = 5;
+  PaymentMethod payment_method = 6;
+  int64         total_amount  = 7;   // หน่วย: สตางค์
+  string        currency      = 8;
+  int64         created_at    = 9;   // Unix timestamp (seconds)
+  int64         updated_at    = 10;
+  string        notes         = 11;  // หมายเหตุพิเศษ
+}
+
+// ShipmentUpdate ข้อมูล shipping event (ใช้ใน streaming response)
+message ShipmentUpdate {
+  string            order_id   = 1;
+  ShipmentEventType event_type = 2;
+  string            location   = 3;   // สถานที่ปัจจุบัน
+  string            message    = 4;   // ข้อความอธิบาย
+  int64             timestamp  = 5;   // Unix timestamp
+  string            carrier    = 6;   // ชื่อบริษัทขนส่ง (DHL, Kerry, Flash)
+  string            tracking_no = 7;  // เลขพัสดุ
+}
+
+// ─────────────────────────────────────────────
+// Request / Response Messages
+// ─────────────────────────────────────────────
+
+// PlaceOrderRequest คำขอสร้าง Order ใหม่
+message PlaceOrderRequest {
+  string        customer_id    = 1;
+  repeated OrderItem items     = 2;
+  Address       shipping_addr  = 3;
+  PaymentMethod payment_method = 4;
+  string        idempotency_key = 5;  // สำหรับ idempotent request
+}
+
+// PlaceOrderResponse ผลลัพธ์การสร้าง Order
+message PlaceOrderResponse {
+  Order  order          = 1;
+  string payment_ref    = 2;  // อ้างอิงการชำระเงิน
+  string estimated_delivery = 3;  // วันที่คาดว่าจะส่งถึง
+}
+
+// GetOrderRequest คำขอดึงข้อมูล Order
+message GetOrderRequest {
+  string order_id    = 1;
+  string customer_id = 2;  // ใช้ยืนยัน ownership
+}
+
+// GetOrderResponse ผลลัพธ์การดึงข้อมูล Order
+message GetOrderResponse {
+  Order order = 1;
+}
+
+// ShipOrderRequest คำขอติดตามการจัดส่ง (เริ่ม server streaming)
+message ShipOrderRequest {
+  string order_id    = 1;
+  string customer_id = 2;
+}
+
+// ─────────────────────────────────────────────
+// Error Detail Messages
+// ─────────────────────────────────────────────
+
+// OrderNotFoundError ส่งกลับเมื่อไม่พบ Order
+message OrderNotFoundError {
+  string order_id = 1;
+  string message  = 2;
+}
+
+// InsufficientInventoryError ส่งกลับเมื่อสต็อกไม่พอ
+message InsufficientInventoryError {
+  string product_id = 1;
+  int32  requested  = 2;  // จำนวนที่ขอ
+  int32  available  = 3;  // จำนวนที่มีในสต็อก
+}
+
+// PaymentError ส่งกลับเมื่อการชำระเงินล้มเหลว
+message PaymentError {
+  string payment_ref    = 1;
+  string decline_reason = 2;
+  bool   retryable      = 3;  // ลองใหม่ได้หรือไม่
+}
+
+// ValidationError รายละเอียด field ที่ validate ไม่ผ่าน
+message ValidationError {
+  message FieldViolation {
+    string field   = 1;
+    string message = 2;
+  }
+  repeated FieldViolation violations = 1;
+}
+
+// ─────────────────────────────────────────────
+// Service Definition
+// ─────────────────────────────────────────────
+
+// OrderService บริการจัดการ Order สำหรับ e-commerce
+//
+// การออกแบบ gRPC มี 4 รูปแบบ:
+//   1. Unary RPC                  - request/response เดียว (PlaceOrder, GetOrder)
+//   2. Server Streaming RPC       - client ส่ง 1 ครั้ง, server stream กลับ (ShipOrder)
+//   3. Client Streaming RPC       - client stream, server ตอบ 1 ครั้ง
+//   4. Bidirectional Streaming RPC - ทั้งสองฝั่ง stream พร้อมกัน
+service OrderService {
+  // PlaceOrder สร้าง Order ใหม่ (Unary RPC)
+  // Error codes:
+  //   INVALID_ARGUMENT  - ข้อมูลไม่ถูกต้อง (detail: ValidationError)
+  //   RESOURCE_EXHAUSTED - สต็อกหมด (detail: InsufficientInventoryError)
+  //   FAILED_PRECONDITION - การชำระเงินล้มเหลว (detail: PaymentError)
+  //   ALREADY_EXISTS    - idempotency_key ซ้ำ
+  rpc PlaceOrder(PlaceOrderRequest) returns (PlaceOrderResponse);
+
+  // GetOrder ดึงข้อมูล Order (Unary RPC)
+  // Error codes:
+  //   NOT_FOUND         - ไม่พบ Order (detail: OrderNotFoundError)
+  //   PERMISSION_DENIED - customer_id ไม่ตรงกับ Order
+  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+
+  // ShipOrder ติดตามสถานะการจัดส่ง (Server Streaming RPC)
+  // Server จะส่ง ShipmentUpdate หลายครั้งตลอด lifecycle การจัดส่ง
+  // Client ต้องรับจนกว่า stream จะปิด (EOF) หรือ error
+  // Error codes:
+  //   NOT_FOUND         - ไม่พบ Order
+  //   FAILED_PRECONDITION - Order ยังไม่ได้ถูก confirm
+  rpc ShipOrder(ShipOrderRequest) returns (stream ShipmentUpdate);
+}

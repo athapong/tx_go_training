@@ -1,0 +1,10 @@
+.claude
+.env
+.vscode
+main
+.rtk
+.understand-anything
+.DS_Store
+.out
+*.pptx
+.test
