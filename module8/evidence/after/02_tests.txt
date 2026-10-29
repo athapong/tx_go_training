@@ -1,0 +1,14 @@
+$ go test -race -count=1 -v ./module8/tracing/ ./module8/complete_service/
+=== RUN   TestProcessOrdersInParallel_WaitsForAll
+--- PASS: TestProcessOrdersInParallel_WaitsForAll (0.27s)
+=== RUN   TestCreateOrderHandler_RejectsNonPost
+--- PASS: TestCreateOrderHandler_RejectsNonPost (0.00s)
+PASS
+ok  	tx_go_training/module8/tracing	1.923s
+=== RUN   TestSimulateOrderProcessing_SpansAreSiblings
+--- PASS: TestSimulateOrderProcessing_SpansAreSiblings (0.10s)
+=== RUN   TestRouteLabel
+--- PASS: TestRouteLabel (0.00s)
+PASS
+ok  	tx_go_training/module8/complete_service	1.583s
+exit=0

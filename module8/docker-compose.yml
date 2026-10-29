@@ -85,8 +85,8 @@ services:
     restart: unless-stopped
     ports:
       - "16686:16686"   # Jaeger UI
-      - "4319:4317"     # OTLP gRPC (host 4319, container 4317)
-      - "4320:4318"     # OTLP HTTP (host 4320, container 4318)
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP — ตรงกับ default localhost:4318 ใน Go services
       - "14268:14268"   # Jaeger thrift (legacy)
     environment:
       - COLLECTOR_OTLP_ENABLED=true

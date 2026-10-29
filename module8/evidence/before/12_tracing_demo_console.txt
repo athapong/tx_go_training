@@ -1,0 +1,20 @@
+$ go run ./module8/tracing   # HEAD code, default config, Ctrl+C at end (no graceful shutdown: process just dies)
+=== OpenTelemetry Tracing Demo ===
+Server: http://localhost:8082
+Jaeger UI: http://localhost:16686
+
+Test:
+  curl -X POST http://localhost:8082/orders
+
+Span hierarchy per request:
+  POST /orders (HTTP span)
+  └─ processOrder
+     ├─ validateOrder
+     ├─ checkInventory
+     │  └─ db.query (x N items)
+     ├─ processPayment (external call)
+     └─ db.insert
+
+2026/10/29 09:00:20 traces export: Post "http://localhost:4318/v1/traces": dial tcp [::1]:4318: connect: connection refused
+
+[killed]

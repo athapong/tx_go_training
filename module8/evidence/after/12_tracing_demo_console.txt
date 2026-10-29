@@ -1,0 +1,21 @@
+$ go run ./module8/tracing   # fixed code, default config, Ctrl+C at end
+=== OpenTelemetry Tracing Demo ===
+Server: http://localhost:8082
+Jaeger UI: http://localhost:16686
+
+Test:
+  curl -X POST http://localhost:8082/orders
+
+Span hierarchy per request:
+  POST /orders (HTTP span)
+  └─ processOrder
+     ├─ validateOrder
+     ├─ checkInventory
+     │  └─ db.query (x N items)
+     ├─ processPayment (external call)
+     └─ db.insert
+
+
+[killed]
+shutting down...
+stopped, spans flushed

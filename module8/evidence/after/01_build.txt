@@ -1,0 +1,2 @@
+$ go build ./module8/... && go vet ./module8/...   # fixed code, tidied go.sum
+exit=0

@@ -1,0 +1,90 @@
+$ go test -race -count=1 -v ./module8/tracing/ ./module8/complete_service/   # HEAD code (deps tidied so it compiles; TestRouteLabel omitted, routeLabel does not exist yet)
+=== RUN   TestProcessOrdersInParallel_WaitsForAll
+    main_test.go:48: processOrder spans ended before return = 19, want 20
+--- FAIL: TestProcessOrdersInParallel_WaitsForAll (0.24s)
+=== RUN   TestCreateOrderHandler_RejectsNonPost
+==================
+WARNING: DATA RACE
+Write at 0x0001037d18f0 by goroutine 32:
+  tx_go_training/module8/tracing.useRecorder()
+      /private/tmp/claude-501/-Users-athapong-kaewsalapoom-Development-tx-go-training/d98b4923-6551-4967-bf41-870afe4d9119/scratchpad/repo/module8/tracing/main_test.go:17 +0xf0
+  tx_go_training/module8/tracing.TestCreateOrderHandler_RejectsNonPost()
+      /private/tmp/claude-501/-Users-athapong-kaewsalapoom-Development-tx-go-training/d98b4923-6551-4967-bf41-870afe4d9119/scratchpad/repo/module8/tracing/main_test.go:53 +0x28
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/testing/testing.go:2258 +0x34
+
+Previous read at 0x0001037d18f0 by goroutine 20:
+  tx_go_training/module8/tracing.saveOrderToDB()
+      /private/tmp/claude-501/-Users-athapong-kaewsalapoom-Development-tx-go-training/d98b4923-6551-4967-bf41-870afe4d9119/scratchpad/repo/module8/tracing/main.go:340 +0x440
+  tx_go_training/module8/tracing.processOrder()
+      /private/tmp/claude-501/-Users-athapong-kaewsalapoom-Development-tx-go-training/d98b4923-6551-4967-bf41-870afe4d9119/scratchpad/repo/module8/tracing/main.go:237 +0xc8c
+  tx_go_training/module8/tracing.processOrdersInParallel.func1()
+      /private/tmp/claude-501/-Users-athapong-kaewsalapoom-Development-tx-go-training/d98b4923-6551-4967-bf41-870afe4d9119/scratchpad/repo/module8/tracing/main.go:417 +0xa0
+
+Goroutine 32 (running) created at:
+  testing.(*T).Run()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/testing/testing.go:2258 +0x7bc
+  testing.runTests.func1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/testing/testing.go:2742 +0x74
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/testing/testing.go:2193 +0x164
+  testing.runTests()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/testing/testing.go:2740 +0x7a0
+  testing.(*M).Run()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/testing/testing.go:2600 +0xb38
+  main.main()
+      _testmain.go:48 +0x100
+  runtime.main()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:302 +0x37c
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+  runtime.doInit1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/runtime/proc.go:8154 +0xc0
+
+Goroutine 20 (running) created at:
+  tx_go_training/module8/tracing.processOrdersInParallel()
+      /private/tmp/claude-501/-Users-athapong-kaewsalapoom-Development-tx-go-training/d98b4923-6551-4967-bf41-870afe4d9119/scratchpad/repo/module8/tracing/main.go:414 +0x360
+  tx_go_training/module8/tracing.TestProcessOrdersInParallel_WaitsForAll()
+      /private/tmp/claude-501/-Users-athapong-kaewsalapoom-Development-tx-go-training/d98b4923-6551-4967-bf41-870afe4d9119/scratchpad/repo/module8/tracing/main_test.go:36 +0x1d8
+  testing.tRunner()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/testing/testing.go:2193 +0x164
+  testing.(*T).Run.gowrap1()
+      /opt/homebrew/Cellar/go/1.27.0/libexec/src/testing/testing.go:2258 +0x34
+==================
+    main_test.go:59: GET /orders status = 201, want 405
+    testing.go:1865: race detected during execution of test
+--- FAIL: TestCreateOrderHandler_RejectsNonPost (0.10s)
+FAIL
+FAIL	tx_go_training/module8/tracing	0.954s
+=== RUN   TestSimulateOrderProcessing_SpansAreSiblings
+    main_test.go:29: span "db.checkInventory" parent = e6a7bcb013258ba9, want createOrder (42166af39704d587)
+    main_test.go:29: span "payment.process" parent = 9a6100dd5b1184da, want createOrder (42166af39704d587)
+--- FAIL: TestSimulateOrderProcessing_SpansAreSiblings (0.19s)
+FAIL
+FAIL	tx_go_training/module8/complete_service	0.959s
+FAIL
+exit=1

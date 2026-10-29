@@ -1,0 +1,8 @@
+$ go build ./module8/...   # HEAD, go.sum as committed
+/Users/athapong.kaewsalapoom/go/pkg/mod/google.golang.org/grpc@v1.68.0/trace_withtrace.go:26:2: missing go.sum entry for module providing package golang.org/x/net/trace (imported by google.golang.org/grpc); to add:
+	go get google.golang.org/grpc@v1.68.0
+/Users/athapong.kaewsalapoom/go/pkg/mod/google.golang.org/grpc@v1.68.0/internal/transport/controlbuf.go:31:2: missing go.sum entry for module providing package golang.org/x/net/http2 (imported by google.golang.org/grpc/internal/transport); to add:
+	go get google.golang.org/grpc/internal/transport@v1.68.0
+/Users/athapong.kaewsalapoom/go/pkg/mod/google.golang.org/grpc@v1.68.0/internal/transport/controlbuf.go:32:2: missing go.sum entry for module providing package golang.org/x/net/http2/hpack (imported by google.golang.org/grpc/internal/transport); to add:
+	go get google.golang.org/grpc/internal/transport@v1.68.0
+exit=1

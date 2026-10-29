@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -228,7 +229,7 @@ func observabilityMiddleware(next http.Handler) http.Handler {
 		// ── 1. TRACE: Extract or create trace context ──
 		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
 
-		spanName := r.Method + " " + r.URL.Path
+		spanName := r.Method + " " + routeLabel(r.URL.Path)
 		ctx, span := tracer.Start(ctx, spanName,
 			trace.WithSpanKind(trace.SpanKindServer),
 			trace.WithAttributes(
@@ -276,7 +277,8 @@ func observabilityMiddleware(next http.Handler) http.Handler {
 
 		duration := time.Since(start)
 		statusStr := strconv.Itoa(rw.statusCode)
-		path := r.URL.Path
+		// ใช้ route label แทน raw path — กัน cardinality ระเบิดเมื่อมีคนยิง path มั่ว
+		path := routeLabel(r.URL.Path)
 
 		// ── 5. METRICS: บันทึก metrics หลัง handler ──
 		httpRequestsTotal.WithLabelValues(r.Method, path, statusStr).Inc()
@@ -333,23 +335,22 @@ func createOrderHandler(store *OrderStore) http.HandlerFunc {
 
 		processingStart := time.Now()
 
-		// จำลอง order data
+		// จำลอง order data — TotalBaht คำนวณจาก items ให้ข้อมูลตรงกัน
 		orderID := "ORD-" + generateID()[:8]
+		item := Item{
+			ProductID: "PROD-001",
+			Name:      "Wireless Earbuds",
+			Price:     math.Round((100.0+rand.Float64()*4900.0)*100) / 100,
+			Quantity:  1 + rand.Intn(2),
+		}
 		order := &Order{
 			ID:           orderID,
 			CustomerID:   fmt.Sprintf("CUST-%d", rand.Intn(9999)),
 			CustomerTier: randomTier(),
-			TotalBaht:    100.0 + rand.Float64()*9900.0,
+			TotalBaht:    item.Price * float64(item.Quantity),
 			Status:       "pending",
 			CreatedAt:    time.Now(),
-			Items: []Item{
-				{
-					ProductID: "PROD-001",
-					Name:      "iPhone 15",
-					Price:     35900.0,
-					Quantity:  1,
-				},
-			},
+			Items:        []Item{item},
 		}
 
 		span.SetAttributes(
@@ -480,13 +481,17 @@ func healthHandler(store *OrderStore) http.HandlerFunc {
 // ============================================================
 
 func simulateOrderProcessing(ctx context.Context, order *Order) error {
+	// ⚠️  ห้าม reassign ctx ด้วย ctx ที่ได้จาก tracer.Start ตรงนี้
+	// ไม่งั้น span ถัดไปจะเป็นลูกของ span ก่อนหน้า (ซ้อนเป็นสาย)
+	// ทุก step ต้องเป็น sibling ภายใต้ createOrder → ใช้ ctx ตัวเดิม
+
 	// Validate
-	ctx, validateSpan := tracer.Start(ctx, "validateOrder")
+	_, validateSpan := tracer.Start(ctx, "validateOrder")
 	time.Sleep(time.Duration(5+rand.Intn(20)) * time.Millisecond)
 	validateSpan.End()
 
 	// Check inventory (DB call simulation)
-	ctx, inventorySpan := tracer.Start(ctx, "db.checkInventory",
+	_, inventorySpan := tracer.Start(ctx, "db.checkInventory",
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			semconv.DBSystemNameKey.String("postgresql"),
@@ -596,6 +601,23 @@ func setupLogger() *slog.Logger {
 // HELPERS
 // ============================================================
 
+// knownRoutes = routes ที่ register ใน mux (ใช้เป็น metric label ได้อย่างปลอดภัย)
+var knownRoutes = map[string]bool{
+	"/orders":     true,
+	"/orders/get": true,
+	"/health":     true,
+	"/metrics":    true,
+}
+
+// routeLabel คืน path ถ้าเป็น route ที่รู้จัก ไม่งั้นรวมเป็น "unmatched"
+// Prometheus label ทุกค่าใหม่ = time series ใหม่ → ห้ามใช้ค่าที่ client ควบคุมได้ตรงๆ
+func routeLabel(path string) string {
+	if knownRoutes[path] {
+		return path
+	}
+	return "unmatched"
+}
+
 func generateID() string {
 	return fmt.Sprintf("%016x", rand.Int63())
 }
@@ -628,7 +650,15 @@ func main() {
 		)
 		tracer = nooptrace.NewTracerProvider().Tracer(serviceName)
 	} else {
-		defer shutdown(ctx)
+		// ใช้ context ใหม่ ไม่ใช่ ctx จาก signal.NotifyContext
+		// เพราะตอน defer นี้ทำงาน ctx ถูก cancel ไปแล้ว → flush spans ชุดสุดท้ายไม่ทัน
+		defer func() {
+			flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := shutdown(flushCtx); err != nil {
+				logger.Error("tracer shutdown error", "error", err)
+			}
+		}()
 	}
 
 	// Pillar 3: Metrics (auto-setup via promauto)

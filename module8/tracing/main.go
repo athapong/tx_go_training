@@ -10,7 +10,10 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -406,22 +409,21 @@ func processOrdersInParallel(ctx context.Context, orders []Order) []error {
 	defer span.End()
 
 	errs := make([]error, len(orders))
-	done := make(chan struct{})
 
+	// ใช้ WaitGroup รอทุก goroutine — ห้ามใช้ "goroutine ตัวสุดท้ายปิด channel"
+	// เพราะ goroutine index สุดท้ายอาจจบก่อนตัวอื่น → return ก่อนงานเสร็จ + data race บน errs
+	var wg sync.WaitGroup
 	for i, order := range orders {
-		i, order := i, order // capture loop variables
-
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			// ส่ง ctx ที่มี parent span เข้า goroutine
 			// goroutine จะสร้าง child span ที่ต่อจาก parent
 			errs[i] = processOrder(ctx, order)
-			if i == len(orders)-1 {
-				close(done)
-			}
 		}()
 	}
 
-	<-done
+	wg.Wait()
 	return errs
 }
 
@@ -430,6 +432,11 @@ func processOrdersInParallel(ctx context.Context, orders []Order) []error {
 // ============================================================
 
 func createOrderHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	ctx := r.Context()
 
 	// ดึง customer tier จาก baggage (ถ้า upstream ส่งมา)
@@ -491,17 +498,19 @@ func (rw *responseWriter) WriteHeader(code int) {
 // ============================================================
 
 func main() {
-	ctx := context.Background()
+	// รับ Ctrl+C / SIGTERM เพื่อ shutdown อย่างนุ่มนวล
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	// ตั้งค่า tracing
+	// หมายเหตุ: OTLP exporter ต่อ connection แบบ lazy — ถ้า Jaeger ไม่ได้รัน
+	// setupTracing จะไม่ error แต่จะเห็น log "traces export: ... connection refused" แทน
 	shutdown, err := setupTracing(ctx)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to setup tracing: %v\n", err)
-		fmt.Fprintln(os.Stderr, "Note: Make sure Jaeger is running (docker-compose up)")
 		fmt.Fprintln(os.Stderr, "Continuing with no-op tracer...")
 		tracer = nooptrace.NewTracerProvider().Tracer(serviceName)
-	} else {
-		defer shutdown(ctx)
+		shutdown = func(context.Context) error { return nil }
 	}
 
 	mux := http.NewServeMux()
@@ -535,8 +544,26 @@ func main() {
 		Handler: handler,
 	}
 
-	if err := server.ListenAndServe(); err != nil {
-		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
-		os.Exit(1)
+	go func() {
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
+			stop()
+		}
+	}()
+
+	<-ctx.Done()
+	fmt.Println("shutting down...")
+
+	// ใช้ context ใหม่ (ctx ถูก cancel แล้ว) — หยุดรับ request ก่อน แล้วค่อย flush spans
+	// ถ้าไม่ flush, spans ที่ค้างใน BatchSpanProcessor จะหายตอนปิดโปรแกรม
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		fmt.Fprintf(os.Stderr, "Server shutdown error: %v\n", err)
 	}
+	if err := shutdown(shutdownCtx); err != nil {
+		fmt.Fprintf(os.Stderr, "Tracer shutdown error: %v\n", err)
+	}
+	fmt.Println("stopped, spans flushed")
 }

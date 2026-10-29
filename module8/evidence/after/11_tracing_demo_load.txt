@@ -1,0 +1,21 @@
+$ e2e http://localhost:8082 5 "" processOrder   # tracing demo, fixed code, default config
+POST /orders -> 201 {"order_id": "ORD-56143", "trace_id": "b53ec8fe8fb0c7cfba405c57d8c90bc4"}
+POST /orders -> 201 {"order_id": "ORD-68863", "trace_id": "a40bcba62de6177744c666b613905521"}
+POST /orders -> 201 {"order_id": "ORD-86408", "trace_id": "025741bb797e56109cc4a29c04324826"}
+POST /orders -> 201 {"order_id": "ORD-74438", "trace_id": "86c0f9a78ef43a73f94aa8fe108cd32c"}
+POST /orders -> 201 {"order_id": "ORD-89508", "trace_id": "05cfe6b6ecb556822777c5ee7e334bef"}
+GET /orders -> 405 method not allowed
+GET /scan-*-1 -> 404 (junk path, cardinality probe)
+GET /scan-*-2 -> 404 (junk path, cardinality probe)
+GET /scan-*-3 -> 404 (junk path, cardinality probe)
+waiting 7s for batch exporter...
+jaeger services: {"data":["order-service","jaeger-all-in-one"],"total":2,"limit":0,"offset":0,"errors":null}
+jaeger traces for order-service: 167
+sample trace (span <- parent):
+  checkInventory <- processOrder
+  validateOrder <- processOrder
+  db.query <- checkInventory
+  processPayment <- processOrder
+  processOrder <- POST /orders
+  POST /orders <- (root)
+  db.insert <- processOrder
